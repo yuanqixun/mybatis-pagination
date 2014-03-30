@@ -19,6 +19,8 @@ import org.noo.pagination.uitls.Reflections;
 import java.sql.Connection;
 import java.util.Properties;
 
+import javax.xml.bind.PropertyException;
+
 /**
  * <p>
  * Mybatis数据库分页插件.
@@ -59,14 +61,20 @@ public class PreparePaginationInterceptor extends BaseInterceptor {
                     throw new NullPointerException("parameterObject尚未实例化！");
                 } else {
                     final Connection connection = (Connection) ivk.getArgs()[0];
+                    //获得数据库方言
+                    DIALECT = getDialect(connection);
                     final String sql = boundSql.getSql();
                     //记录统计
                     final int count = SQLHelp.getCount(sql, connection,
-                            mappedStatement, parameterObject, boundSql);
+                            mappedStatement, parameterObject, boundSql,DIALECT);
+                    connection.close();
                     Page page = null;
                     page = convertParameter(parameterObject, page);
-                    page.init(count, page.getPageSize(), page.getCurrentPage());
-                    String pagingSql = SQLHelp.generatePageSql(sql, page, DIALECT);
+                    //page.init(count, page.getPageSize(), page.getCurrentPage());
+                    page.setTotalRows(count);
+                    
+//                    String pagingSql = SQLHelp.generatePageSql(sql, page, DIALECT);
+                    String pagingSql = SQLHelp.generatePageSql(sql, page.getPageStartRow(),page.getPageSize(), DIALECT);
                     if (log.isDebugEnabled()) {
                         log.debug("分页SQL:" + pagingSql);
                     }
@@ -86,6 +94,11 @@ public class PreparePaginationInterceptor extends BaseInterceptor {
 
     @Override
     public void setProperties(Properties properties) {
-        initProperties(properties);
+        try {
+	        initProperties(properties);
+        } catch (PropertyException e) {
+	        // TODO Auto-generated catch block
+	        e.printStackTrace();
+        }
     }
 }

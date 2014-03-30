@@ -16,6 +16,8 @@ import org.noo.pagination.page.PageContext;
 import java.sql.Connection;
 import java.util.Properties;
 
+import javax.xml.bind.PropertyException;
+
 /**
  * <p>
  * 数据库分页插件，只拦截查询语句.
@@ -48,7 +50,7 @@ public class PaginationInterceptor extends BaseInterceptor {
             PageContext context = PageContext.getPageContext();
 
             //map传参每次都将currentPage重置,先判读map再判断context
-            if (parameterObject != null && context == null) {
+            if (parameterObject != null){// && context == null) {
                 page = convertParameter(parameterObject, page);
             }
 
@@ -59,19 +61,25 @@ public class PaginationInterceptor extends BaseInterceptor {
             }
             //后面用到了context的东东
             if (page != null) {
-                int totPage = page.getTotalRows();
+                int totalRows = page.getTotalRows();
                 //得到总记录数
-                if (totPage == 0) {
+                if (totalRows == 0) {
                     Connection connection = mappedStatement.getConfiguration().getEnvironment().getDataSource().getConnection();
-                    totPage = SQLHelp.getCount(originalSql, connection, mappedStatement, parameterObject, boundSql);
+                    //获得数据库方言
+                    DIALECT = getDialect(connection);
+                    totalRows = SQLHelp.getCount(originalSql, connection, mappedStatement, parameterObject, boundSql,DIALECT);
+                    connection.close();
                 }
 
                 //分页计算
-                page.init(totPage, page.getPageSize(), page.getCurrentPage());
-
+                //page.init(totalRows, page.getPageSize(), page.getCurrentPage());
+                page.setTotalRows(totalRows);
+                
                 //分页查询 本地化对象 修改数据库注意修改实现
 
-                String pageSql = SQLHelp.generatePageSql(originalSql, page, DIALECT);
+//                String pageSql = SQLHelp.generatePageSql(originalSql, page, DIALECT);
+                String pageSql = SQLHelp.generatePageSql(originalSql, page.getPageStartRow(),page.getPageSize(), DIALECT);
+                
                 if (log.isDebugEnabled()) {
                     log.debug("分页SQL:" + pageSql);
                 }
@@ -93,7 +101,12 @@ public class PaginationInterceptor extends BaseInterceptor {
 
     @Override
     public void setProperties(Properties properties) {
-        super.initProperties(properties);
+        try {
+	        super.initProperties(properties);
+        } catch (PropertyException e) {
+	        // TODO Auto-generated catch block
+	        e.printStackTrace();
+        }
     }
 
     private MappedStatement copyFromMappedStatement(MappedStatement ms,
